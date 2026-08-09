@@ -1,0 +1,96 @@
+"""Offline tests for the audit log and policy."""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from shesha_audit.log import AuditLog  # noqa: E402
+from shesha_audit.policy import Policy, Rule, Verdict, default_policy  # noqa: E402
+from shesha_audit.server import add_rule, check, record_execution, verify_integrity  # noqa: E402
+
+
+@pytest.fixture()
+def audit(tmp_path, monkeypatch):
+    import shesha_audit.server as srv
+    srv._log = AuditLog(root=tmp_path)
+    return srv._log
+
+
+def test_append_only_chain(audit):
+    e1 = audit.record("coder", "write_file", "executed", args={"path": "/x"})
+    e2 = audit.record("coder", "write_file", "executed", args={"path": "/y"})
+    assert e1.prev_hash == ""
+    assert e2.prev_hash == e1.hash
+    assert e2.hash != e1.hash
+
+
+def test_verify_detects_tampering(audit):
+    audit.record("a", "t", "executed")
+    audit.record("a", "t", "executed")
+    ok, _ = audit.verify()
+    assert ok
+    # Tamper with the file
+    lines = audit.path.read_text().splitlines()
+    import json
+    obj = json.loads(lines[-1])
+    obj["result"] = "tampered"
+    lines[-1] = json.dumps(obj)
+    audit.path.write_text("\n".join(lines) + "\n")
+    ok, bad = audit.verify()
+    assert not ok and bad == 2
+
+
+def test_default_policy_allows_reads():
+    p = default_policy()
+    assert p.decide("list_roles", {})[0] == Verdict.ALLOW
+    assert p.decide("get_system_status", {})[0] == Verdict.ALLOW
+
+
+def test_default_policy_denies_protected_paths():
+    p = default_policy()
+    v, _ = p.decide("write_file", {"path": "/home/u/.ssh/id_rsa"})
+    assert v == Verdict.DENY
+
+
+def test_default_policy_confirms_unknown():
+    p = default_policy()
+    v, _ = p.decide("something_weird", {})
+    assert v == Verdict.CONFIRM
+
+
+def test_custom_rule_precedence():
+    p = Policy(rules=[Rule(Verdict.ALLOW, "safe_tool")])
+    assert p.decide("safe_tool")[0] == Verdict.ALLOW
+
+
+def test_server_check_logs_decision(audit):
+    r = check("coder", "write_file", {"path": "/home/u/Documents/x.txt"})
+    assert r["verdict"] in {"allow", "confirm", "deny"}
+    assert "event_hash" in r
+
+
+def test_server_blocks_secrets(audit):
+    r = check("coder", "write_file", {"path": "/home/u/.ssh/key"})
+    assert r["verdict"] == "deny"
+    assert not r["allowed"]
+
+
+def test_record_execution(audit):
+    r = record_execution("coder", "run_tests", True, result="ok")
+    assert r["ok"]
+    assert len(audit.recent()) >= 1
+
+
+def test_verify_integrity(audit):
+    record_execution("coder", "x", True)
+    assert verify_integrity()["ok"] is True
+
+
+def test_add_rule(audit):
+    add_rule("deny", "dangerous_tool", reason="no")
+    r = check("coder", "dangerous_tool")
+    assert r["verdict"] == "deny"
