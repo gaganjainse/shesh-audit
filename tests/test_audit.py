@@ -124,3 +124,37 @@ def test_guard_logs_execution(tmp_path):
     g = Guard(audit=AuditLog(root=tmp_path))
     g.log_execution("run_tests", True, result="ok")
     assert any(e["action"] == "run_tests" for e in g.audit.recent())
+
+
+# ── NexusAOS event bridge ──────────────────────────────────────
+def test_nexus_bridge_appends_events(tmp_path):
+    from shesha_audit.nexus_bridge import NexusBridge, NexusEventKind
+    bridge = NexusBridge(tmp_path / "nexus.jsonl")
+    e1 = bridge.emit(NexusEventKind.TOOL_REQUESTED, {"tool": "x"})
+    e2 = bridge.emit(NexusEventKind.TOOL_COMPLETED, {"ok": True})
+    assert e1.sequence == 1 and e2.sequence == 2
+    assert len(bridge.read()) == 2
+    assert bridge.read()[0].kind == "ToolRequested"
+
+
+def test_guard_emits_nexus_events(tmp_path):
+    from shesha_audit.gate import Guard
+    from shesha_audit.log import AuditLog
+    from shesha_audit.nexus_bridge import NexusBridge, NexusEventKind
+    bridge = NexusBridge(tmp_path / "nexus.jsonl")
+    g = Guard(audit=AuditLog(root=tmp_path), nexus=bridge)
+    g.check("list_roles")                      # allowed
+    g.log_execution("list_roles", True)
+    kinds = [e.kind for e in bridge.read()]
+    assert NexusEventKind.TOOL_REQUESTED.value in kinds
+    assert NexusEventKind.TOOL_COMPLETED.value in kinds
+
+
+def test_guard_denied_emits_policy_denied(tmp_path):
+    from shesha_audit.gate import Guard
+    from shesha_audit.log import AuditLog
+    from shesha_audit.nexus_bridge import NexusBridge, NexusEventKind
+    bridge = NexusBridge(tmp_path / "nexus.jsonl")
+    g = Guard(audit=AuditLog(root=tmp_path), nexus=bridge)
+    g.check("write_file", {"path": "/home/u/.ssh/key"})  # denied
+    assert any(e.kind == NexusEventKind.POLICY_DENIED.value for e in bridge.read())

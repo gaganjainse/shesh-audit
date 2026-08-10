@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .log import AuditLog
+from .nexus_bridge import NexusBridge, NexusEventKind
 from .policy import Policy, default_policy
 
 
@@ -36,13 +37,22 @@ class Decision:
 class Guard:
     """Wraps a Policy + AuditLog so every tool call is decided and recorded."""
 
-    def __init__(self, policy: Policy | None = None, audit: AuditLog | None = None) -> None:
+    def __init__(self, policy: Policy | None = None, audit: AuditLog | None = None,
+                 nexus: NexusBridge | None = None) -> None:
         self.policy = policy or default_policy()
         self.audit = audit or AuditLog()
+        self.nexus = nexus
 
     def check(self, tool: str, args: dict | None = None, *, actor: str = "agent") -> Decision:
         verdict, reason = self.policy.decide(tool, args)
         self.audit.record(actor, tool, verdict.value, args=args or {}, result=reason)
+        if self.nexus is not None:
+            kind = {
+                "allow": NexusEventKind.TOOL_REQUESTED,
+                "confirm": NexusEventKind.CONFIRMATION_REQUESTED,
+                "deny": NexusEventKind.POLICY_DENIED,
+            }[verdict.value]
+            self.nexus.emit(kind, {"actor": actor, "tool": tool, "args": args or {}})
         return Decision(
             allowed=(verdict.value == "allow"),
             requires_confirmation=(verdict.value == "confirm"),
@@ -54,6 +64,10 @@ class Guard:
                      args: dict | None = None, result: str = "") -> None:
         self.audit.record(actor, tool, "executed" if success else "failed",
                           args=args or {}, result=result)
+        if self.nexus is not None:
+            self.nexus.emit(
+                NexusEventKind.TOOL_COMPLETED if success else NexusEventKind.TOOL_FAILED,
+                {"actor": actor, "tool": tool, "result": result[:200]})
 
     def is_allowed(self, tool: str, args: dict | None = None, *, actor: str = "agent") -> bool:
         """Convenience: True only if the action is silently allowed."""
