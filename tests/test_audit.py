@@ -158,3 +158,40 @@ def test_guard_denied_emits_policy_denied(tmp_path):
     g = Guard(audit=AuditLog(root=tmp_path), nexus=bridge)
     g.check("write_file", {"path": "/home/u/.ssh/key"})  # denied
     assert any(e.kind == NexusEventKind.POLICY_DENIED.value for e in bridge.read())
+
+
+# ── MCP GuardedMCP middleware ────────────────────────────────
+def test_guarded_mcp_allows_read_tools(tmp_path):
+    import asyncio
+
+    from shesha_audit.gate import Guard
+    from shesha_audit.log import AuditLog
+    from shesha_audit.mcp_guard import GuardedMCP
+    mcp = GuardedMCP("test", guard=Guard(audit=AuditLog(root=tmp_path)))
+
+    @mcp.tool()
+    def list_things() -> dict:
+        return {"ok": True, "things": [1, 2, 3]}
+
+    tool = mcp._tool_manager.get_tool("list_things")
+    result = asyncio.run(tool.run({}, {}))
+    assert "[1, 2, 3]" in str(result)
+
+
+def test_guarded_mcp_denies_secrets(tmp_path):
+    import asyncio
+
+    from shesha_audit.gate import Guard
+    from shesha_audit.log import AuditLog
+    from shesha_audit.mcp_guard import GuardedMCP
+    from shesha_audit.policy import Policy, Rule, Verdict
+    mcp = GuardedMCP("test", guard=Guard(audit=AuditLog(root=tmp_path)))
+    mcp.guard = Guard(policy=Policy(rules=[Rule(Verdict.DENY, "*", path_glob="*/.ssh/*")]))
+
+    @mcp.tool()
+    def write_file(path: str) -> dict:
+        return {"ok": True, "wrote": path}
+
+    tool = mcp._tool_manager.get_tool("write_file")
+    result = asyncio.run(tool.run({"path": "/home/u/.ssh/id_rsa"}, {}))
+    assert "denied" in str(result)
