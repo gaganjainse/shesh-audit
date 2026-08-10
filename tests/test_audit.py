@@ -94,3 +94,33 @@ def test_add_rule(audit):
     add_rule("deny", "dangerous_tool", reason="no")
     r = check("coder", "dangerous_tool")
     assert r["verdict"] == "deny"
+
+
+# ── reusable gate ──────────────────────────────────────────────
+def test_guard_allows_reads():
+    from shesha_audit.gate import Guard
+    g = Guard()
+    d = g.check("list_roles")
+    assert d.allowed and not d.requires_confirmation
+
+
+def test_guard_denies_secrets():
+    from shesha_audit.gate import Guard
+    g = Guard()
+    d = g.check("write_file", {"path": "/home/u/.ssh/id_rsa"})
+    assert not d.allowed and d.verdict == "deny"
+
+
+def test_guard_requires_confirmation_for_writes():
+    from shesha_audit.gate import Guard
+    g = Guard()
+    d = g.check("set_power_profile", {"profile": "performance"})
+    assert d.requires_confirmation
+
+
+def test_guard_logs_execution(tmp_path):
+    from shesha_audit.gate import Guard
+    from shesha_audit.log import AuditLog
+    g = Guard(audit=AuditLog(root=tmp_path))
+    g.log_execution("run_tests", True, result="ok")
+    assert any(e["action"] == "run_tests" for e in g.audit.recent())
