@@ -43,6 +43,13 @@ from .policy import Verdict
 GUARDED_MARK = "_shesh_guarded"
 
 
+class GuardDeniedError(ToolError):
+    """A tool call was denied by policy."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"denied: {reason}")
+
+
 class GuardMiddleware(Middleware):
     """Protocol-seam guard: policy-checks tool calls not already wrapped."""
 
@@ -77,20 +84,20 @@ class GuardMiddleware(Middleware):
                 name, False, actor=self._actor, args=args,
                 result=f"denied: {decision.reason}",
             )
-            raise ToolError(f"denied: {decision.reason}")
+            raise GuardDeniedError(decision.reason)
         try:
             result = await call_next(context)
-            self._guard.log_execution(
-                name, True, actor=self._actor, args=args,
-                result=str(result)[:200],
-            )
-            return result
         except Exception as e:
             self._guard.log_execution(
                 name, False, actor=self._actor, args=args,
                 result=str(e)[:200],
             )
             raise
+        self._guard.log_execution(
+            name, True, actor=self._actor, args=args,
+            result=str(result)[:200],
+        )
+        return result
 
 
 class GuardedMCP(FastMCP):
@@ -125,18 +132,20 @@ class GuardedMCP(FastMCP):
                 # when running inside an editor. Pure read tools can opt out.
                 try:
                     result = fn(*args, **kwargs)
-                    self.guard.log_execution(
-                        tool_name,
-                        success=not (isinstance(result, dict) and result.get("ok") is False),
-                        actor=actor, args=inspect_args,
-                        result=str(result)[:200],
-                    )
-                    return result
                 except Exception as e:  # noqa: BLE001
+                    # Telemetry boundary: any tool failure is recorded with its
+                    # message, then re-raised unchanged. Nothing is swallowed.
                     self.guard.log_execution(
                         tool_name, False, actor=actor,
                         args=inspect_args, result=str(e)[:200])
                     raise
+                self.guard.log_execution(
+                    tool_name,
+                    success=not (isinstance(result, dict) and result.get("ok") is False),
+                    actor=actor, args=inspect_args,
+                    result=str(result)[:200],
+                )
+                return result
 
             wrapper.__dict__[GUARDED_MARK] = True
             # Register the wrapper, not the raw function.
