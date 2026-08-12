@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from .log import AuditLog
 from .policy import Verdict, default_policy
 
-mcp = FastMCP("shesha-audit")
+mcp = FastMCP("shesh-audit")
 
 _log: AuditLog | None = None
 _policy = default_policy()

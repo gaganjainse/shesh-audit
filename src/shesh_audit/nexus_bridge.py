@@ -1,6 +1,6 @@
-"""Bridge from Python Soma tools to the SheshaAOS (Rust) event store.
+"""Bridge from Python Soma tools to the SheshAOS (Rust) event store.
 
-SheshaAOS defines events with an EventId (UUIDv7), a monotonic sequence, an
+SheshAOS defines events with an EventId (UUIDv7), a monotonic sequence, an
 EventKind enum, a timestamp, and a JSON payload. This bridge appends events to
 a shared JSONL file in that shape so the Rust brain can ingest them without a
 running service. It is append-only and hash-chained via the main AuditLog, so
@@ -51,7 +51,7 @@ class NexusBridge:
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or (
-            Path.home() / ".local" / "share" / "shesha" / "audit" / "nexus-events.jsonl"
+            Path.home() / ".local" / "share" / "shesh" / "audit" / "nexus-events.jsonl"
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._seq = self._tail_sequence()

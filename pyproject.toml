@@ -1,7 +1,7 @@
 [project]
-name = "shesha-audit"
+name = "shesh-audit"
 version = "0.1.0"
-description = "Shesha Brain: append-only hash-chained audit log and policy gate"
+description = "Shesh Brain: append-only hash-chained audit log and policy gate"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
@@ -12,7 +12,7 @@ dependencies = ["mcp[cli]>=1.0", "fastmcp>=0.1"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [project.scripts]
-shesha-audit-mcp = "shesha_audit.server:main"
+shesh-audit-mcp = "shesh_audit.server:main"
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]

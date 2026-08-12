@@ -1,6 +1,20 @@
-# 🛡️ shesh-audit
+Metadata-Version: 2.4
+Name: shesha-audit
+Version: 0.1.0
+Summary: Shesha Brain: append-only hash-chained audit log and policy gate
+Author: Gagan Jain
+License: GPL-3.0-or-later
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: mcp[cli]>=1.0
+Requires-Dist: fastmcp>=0.1
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
 
-**Append-only, hash-chained audit log + policy gate for Shesh.**
+# 🛡️ shesha-audit
+
+**Append-only, hash-chained audit log + policy gate for Shesha.**
 
 Every action an agent takes passes through `check(actor, tool, args)`, which
 returns allow/confirm/deny and records the decision. Executions are recorded
@@ -9,7 +23,7 @@ detectable via `verify_integrity()`.
 
 - License: GPL-3.0
 - Layer: Brain (governance)
-- Part of: [Shesh ecosystem](https://github.com/gaganjainse/shesh-ecosystem)
+- Part of: [Shesha ecosystem](https://github.com/gaganjainse/shesha-ecosystem)
 
 ## Defaults
 
@@ -28,7 +42,7 @@ detectable via `verify_integrity()`.
 uv sync --extra dev
 uv run pytest -q        # 10 offline tests
 uv run ruff check .
-uv run shesh-audit-mcp
+uv run shesha-audit-mcp
 ```
 
-Events live in `~/.local/share/shesh/audit/events.jsonl`.
+Events live in `~/.local/share/shesha/audit/events.jsonl`.

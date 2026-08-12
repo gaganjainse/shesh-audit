@@ -1,7 +1,7 @@
 """Policy decisions for tool calls.
 
 Three verdicts: allow, confirm, deny. Rules are evaluated in order; the first
-matching rule wins. Defaults to "confirm" for unknown actions so Shesha never
+matching rule wins. Defaults to "confirm" for unknown actions so Shesh never
 silently does something surprising.
 """
 from __future__ import annotations

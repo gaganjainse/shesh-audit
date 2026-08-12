@@ -1,0 +1,2 @@
+[console_scripts]
+shesh-audit-mcp = shesh_audit.server:main

@@ -8,14 +8,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from shesha_audit.log import AuditLog  # noqa: E402
-from shesha_audit.policy import Policy, Rule, Verdict, default_policy  # noqa: E402
-from shesha_audit.server import add_rule, check, record_execution, verify_integrity  # noqa: E402
+from shesh_audit.log import AuditLog  # noqa: E402
+from shesh_audit.policy import Policy, Rule, Verdict, default_policy  # noqa: E402
+from shesh_audit.server import add_rule, check, record_execution, verify_integrity  # noqa: E402
 
 
 @pytest.fixture()
 def audit(tmp_path, monkeypatch):
-    import shesha_audit.server as srv
+    import shesh_audit.server as srv
     srv._log = AuditLog(root=tmp_path)
     return srv._log
 
@@ -98,29 +98,29 @@ def test_add_rule(audit):
 
 # ── reusable gate ──────────────────────────────────────────────
 def test_guard_allows_reads():
-    from shesha_audit.gate import Guard
+    from shesh_audit.gate import Guard
     g = Guard()
     d = g.check("list_roles")
     assert d.allowed and not d.requires_confirmation
 
 
 def test_guard_denies_secrets():
-    from shesha_audit.gate import Guard
+    from shesh_audit.gate import Guard
     g = Guard()
     d = g.check("write_file", {"path": "/home/u/.ssh/id_rsa"})
     assert not d.allowed and d.verdict == "deny"
 
 
 def test_guard_requires_confirmation_for_writes():
-    from shesha_audit.gate import Guard
+    from shesh_audit.gate import Guard
     g = Guard()
     d = g.check("set_power_profile", {"profile": "performance"})
     assert d.requires_confirmation
 
 
 def test_guard_logs_execution(tmp_path):
-    from shesha_audit.gate import Guard
-    from shesha_audit.log import AuditLog
+    from shesh_audit.gate import Guard
+    from shesh_audit.log import AuditLog
     g = Guard(audit=AuditLog(root=tmp_path))
     g.log_execution("run_tests", True, result="ok")
     assert any(e["action"] == "run_tests" for e in g.audit.recent())
@@ -128,7 +128,7 @@ def test_guard_logs_execution(tmp_path):
 
 # ── NexusAOS event bridge ──────────────────────────────────────
 def test_nexus_bridge_appends_events(tmp_path):
-    from shesha_audit.nexus_bridge import NexusBridge, NexusEventKind
+    from shesh_audit.nexus_bridge import NexusBridge, NexusEventKind
     bridge = NexusBridge(tmp_path / "nexus.jsonl")
     e1 = bridge.emit(NexusEventKind.TOOL_REQUESTED, {"tool": "x"})
     e2 = bridge.emit(NexusEventKind.TOOL_COMPLETED, {"ok": True})
@@ -138,9 +138,9 @@ def test_nexus_bridge_appends_events(tmp_path):
 
 
 def test_guard_emits_nexus_events(tmp_path):
-    from shesha_audit.gate import Guard
-    from shesha_audit.log import AuditLog
-    from shesha_audit.nexus_bridge import NexusBridge, NexusEventKind
+    from shesh_audit.gate import Guard
+    from shesh_audit.log import AuditLog
+    from shesh_audit.nexus_bridge import NexusBridge, NexusEventKind
     bridge = NexusBridge(tmp_path / "nexus.jsonl")
     g = Guard(audit=AuditLog(root=tmp_path), nexus=bridge)
     g.check("list_roles")                      # allowed
@@ -151,9 +151,9 @@ def test_guard_emits_nexus_events(tmp_path):
 
 
 def test_guard_denied_emits_policy_denied(tmp_path):
-    from shesha_audit.gate import Guard
-    from shesha_audit.log import AuditLog
-    from shesha_audit.nexus_bridge import NexusBridge, NexusEventKind
+    from shesh_audit.gate import Guard
+    from shesh_audit.log import AuditLog
+    from shesh_audit.nexus_bridge import NexusBridge, NexusEventKind
     bridge = NexusBridge(tmp_path / "nexus.jsonl")
     g = Guard(audit=AuditLog(root=tmp_path), nexus=bridge)
     g.check("write_file", {"path": "/home/u/.ssh/key"})  # denied
@@ -164,9 +164,9 @@ def test_guard_denied_emits_policy_denied(tmp_path):
 def test_guarded_mcp_allows_read_tools(tmp_path):
     import asyncio
 
-    from shesha_audit.gate import Guard
-    from shesha_audit.log import AuditLog
-    from shesha_audit.mcp_guard import GuardedMCP
+    from shesh_audit.gate import Guard
+    from shesh_audit.log import AuditLog
+    from shesh_audit.mcp_guard import GuardedMCP
     mcp = GuardedMCP("test", guard=Guard(audit=AuditLog(root=tmp_path)))
 
     @mcp.tool()
@@ -181,10 +181,10 @@ def test_guarded_mcp_allows_read_tools(tmp_path):
 def test_guarded_mcp_denies_secrets(tmp_path):
     import asyncio
 
-    from shesha_audit.gate import Guard
-    from shesha_audit.log import AuditLog
-    from shesha_audit.mcp_guard import GuardedMCP
-    from shesha_audit.policy import Policy, Rule, Verdict
+    from shesh_audit.gate import Guard
+    from shesh_audit.log import AuditLog
+    from shesh_audit.mcp_guard import GuardedMCP
+    from shesh_audit.policy import Policy, Rule, Verdict
     mcp = GuardedMCP("test", guard=Guard(audit=AuditLog(root=tmp_path)))
     mcp.guard = Guard(policy=Policy(rules=[Rule(Verdict.DENY, "*", path_glob="*/.ssh/*")]))
 

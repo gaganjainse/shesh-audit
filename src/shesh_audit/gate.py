@@ -1,11 +1,11 @@
 """Reusable policy gate for MCP tools.
 
-Other Shesha components import `guard(...)` to check an action against policy
+Other Shesh components import `guard(...)` to check an action against policy
 and log the decision before executing. The gate loads the same default policy
 as the audit server, but can be pointed at a custom rules file.
 
 Usage:
-    from shesha_audit.gate import guard, Guard
+    from shesh_audit.gate import guard, Guard
 
     g = Guard()
     decision = g.check("write_file", {"path": "/home/u/notes/x.md"})

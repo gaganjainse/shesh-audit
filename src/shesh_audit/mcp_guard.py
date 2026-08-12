@@ -2,14 +2,14 @@
 
 FastMCP registers tools via @mcp.tool(). This module provides a `guarded`
 decorator that runs the policy check BEFORE the wrapped function and records
-execution AFTER, so every MCP tool in every Shesha component is governed by
+execution AFTER, so every MCP tool in every Shesh component is governed by
 the same allow/confirm/deny policy without each component re-implementing it.
 
 Usage:
     from mcp.server.fastmcp import FastMCP
-    from shesha_audit.mcp_guard import GuardedMCP
+    from shesh_audit.mcp_guard import GuardedMCP
 
-    mcp = GuardedMCP("shesha-system")  # wraps FastMCP
+    mcp = GuardedMCP("shesh-system")  # wraps FastMCP
 
     @mcp.tool()
     def set_power_profile(profile: str) -> dict:
