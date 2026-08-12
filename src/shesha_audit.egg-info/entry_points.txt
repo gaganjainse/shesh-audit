@@ -1,2 +1,2 @@
 [console_scripts]
-shesha-audit-mcp = shesha_audit.server:main
+shesh-audit-mcp = shesh_audit.server:main

@@ -126,7 +126,7 @@ def test_guard_logs_execution(tmp_path):
     assert any(e["action"] == "run_tests" for e in g.audit.recent())
 
 
-# ── NexusAOS event bridge ──────────────────────────────────────
+# ── SheshAOS event bridge ──────────────────────────────────────
 def test_nexus_bridge_appends_events(tmp_path):
     from shesh_audit.nexus_bridge import NexusBridge, NexusEventKind
     bridge = NexusBridge(tmp_path / "nexus.jsonl")

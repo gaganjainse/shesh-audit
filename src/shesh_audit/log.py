@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 DATA_DIR = Path.home() / ".local" / "share" / "shesh" / "audit"
-_LEGACY_DATA_DIR = Path.home() / ".local" / "share" / "shesha" / "audit"
+_LEGACY_DATA_DIR = Path.home() / ".local" / "share" / "shesh" / "audit"
 if _LEGACY_DATA_DIR.exists() and not DATA_DIR.exists():
     _LEGACY_DATA_DIR.rename(DATA_DIR)  # one-shot migration; legacy name is gone
 
