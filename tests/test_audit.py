@@ -173,8 +173,10 @@ def test_guarded_mcp_allows_read_tools(tmp_path):
     def list_things() -> dict:
         return {"ok": True, "things": [1, 2, 3]}
 
-    tool = mcp._tool_manager.get_tool("list_things")
-    result = asyncio.run(tool.run({}, {}))
+    async def run_tool():
+        tool = await mcp.get_tool("list_things")
+        return await tool.run({})
+    result = asyncio.run(run_tool())
     assert "[1, 2, 3]" in str(result)
 
 
@@ -192,6 +194,8 @@ def test_guarded_mcp_denies_secrets(tmp_path):
     def write_file(path: str) -> dict:
         return {"ok": True, "wrote": path}
 
-    tool = mcp._tool_manager.get_tool("write_file")
-    result = asyncio.run(tool.run({"path": "/home/u/.ssh/id_rsa"}, {}))
+    async def run_tool():
+        tool = await mcp.get_tool("write_file")
+        return await tool.run({"path": "/home/u/.ssh/id_rsa"})
+    result = asyncio.run(run_tool())
     assert "denied" in str(result)

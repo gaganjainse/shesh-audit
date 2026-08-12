@@ -1,7 +1,7 @@
 """MCP server exposing the audit log and policy gate."""
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from .log import AuditLog
 from .policy import Verdict, default_policy

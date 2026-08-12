@@ -1,22 +1,30 @@
-"""MCP server middleware: enforce the Guard on every tool call.
+"""MCP server guard: enforce the Guard on every tool call.
 
-FastMCP registers tools via @mcp.tool(). This module provides a `guarded`
-decorator that runs the policy check BEFORE the wrapped function and records
-execution AFTER, so every MCP tool in every Shesh component is governed by
-the same allow/confirm/deny policy without each component re-implementing it.
+Two enforcement seams, one policy/log path:
+
+1. ``GuardedMCP.tool()`` — wraps *directly registered* tools so the policy
+   check runs before the wrapped function and execution is recorded after.
+   Works even when a tool object is invoked in-process (unit tests).
+2. ``GuardMiddleware`` — a FastMCP 3 server middleware covering tools that
+   never pass through our decorator: mounted servers and stdio/HTTP proxies
+   (shesh-mcp-bundle). It runs the same Guard on the protocol boundary.
+
+Exactly-once guarantee: wrapped tools are marked ``_shesh_guarded``; the
+middleware skips those (they were already checked/logged at the function
+seam), so a call is never double-logged regardless of the layer it enters.
 
 Usage:
-    from mcp.server.fastmcp import FastMCP
+    from fastmcp import FastMCP
     from shesh_audit.mcp_guard import GuardedMCP
 
-    mcp = GuardedMCP("shesh-system")  # wraps FastMCP
+    mcp = GuardedMCP("shesh-system")
 
     @mcp.tool()
     def set_power_profile(profile: str) -> dict:
         ...
 
-For tools that are purely read-only, set require_confirmation=False to skip
-the confirm prompt when policy returns "confirm" (they are still logged).
+    # and, for proxies/mounts:
+    mcp.mount(other_server, namespace="fs")  # also guarded
 """
 from __future__ import annotations
 
@@ -24,19 +32,75 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from fastmcp.server.middleware import Middleware, MiddlewareContext
+from fastmcp.tools.tool import ToolResult
 
 from .gate import Guard
 from .policy import Verdict
 
+GUARDED_MARK = "_shesh_guarded"
+
+
+class GuardMiddleware(Middleware):
+    """Protocol-seam guard: policy-checks tool calls not already wrapped."""
+
+    def __init__(self, guard: Guard, actor: str) -> None:
+        self._guard = guard
+        self._actor = actor
+
+    async def on_call_tool(
+        self, context: MiddlewareContext, call_next
+    ) -> ToolResult:
+        msg = context.message
+        name = getattr(msg, "name", "unknown")
+        args = dict(getattr(msg, "arguments", None) or {})
+        # Mounted servers namespace their tools ("fs__read_file"); the guard
+        # sees the full wire name, which is the honest audit identifier.
+        tool = None
+        fctx = context.fastmcp_context
+        if fctx is not None:
+            try:
+                tool = await fctx.fastmcp.get_tool(name)
+            except Exception:  # noqa: BLE001 — middleware must not break calls
+                tool = None
+        # Only FunctionTools carry .fn (marked when GuardedMCP.tool wrapped
+        # them). Proxied/mounted tools never have it — they enter only here.
+        fn = getattr(tool, "fn", None) if tool is not None else None
+        if fn is not None and getattr(fn, GUARDED_MARK, False):
+            return await call_next(context)  # wrapped seam already handles it
+
+        decision = self._guard.check(name, args, actor=self._actor)
+        if decision.verdict == Verdict.DENY.value:
+            self._guard.log_execution(
+                name, False, actor=self._actor, args=args,
+                result=f"denied: {decision.reason}",
+            )
+            raise ToolError(f"denied: {decision.reason}")
+        try:
+            result = await call_next(context)
+            self._guard.log_execution(
+                name, True, actor=self._actor, args=args,
+                result=str(result)[:200],
+            )
+            return result
+        except Exception as e:
+            self._guard.log_execution(
+                name, False, actor=self._actor, args=args,
+                result=str(e)[:200],
+            )
+            raise
+
 
 class GuardedMCP(FastMCP):
-    """A FastMCP that runs every tool through a Guard."""
+    """A FastMCP that runs every tool — direct or proxied — through a Guard."""
 
     def __init__(self, name: str, guard: Guard | None = None, **kwargs) -> None:
         super().__init__(name, **kwargs)
         self.guard = guard or Guard()
         self._actor = name
+        self.add_middleware(GuardMiddleware(self.guard, actor=name))
 
     def tool(self, *tool_args, **tool_kwargs):  # type: ignore[override]
         """Override tool() to wrap the registered function with policy checks."""
@@ -74,6 +138,7 @@ class GuardedMCP(FastMCP):
                         args=inspect_args, result=str(e)[:200])
                     raise
 
+            wrapper.__dict__[GUARDED_MARK] = True
             # Register the wrapper, not the raw function.
             return super(GuardedMCP, self).tool(*tool_args, **tool_kwargs)(wrapper)
 
