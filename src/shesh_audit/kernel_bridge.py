@@ -1,13 +1,13 @@
-"""Bridge from Python Soma tools to the SheshAOS (Rust) event store.
+"""Bridge from Python Soma tools to the SheshAOS (Rust) kernel event store.
 
 SheshAOS defines events with an EventId (UUIDv7), a monotonic sequence, an
 EventKind enum, a timestamp, and a JSON payload. This bridge appends events to
-a shared JSONL file in that shape so the Rust brain can ingest them without a
+a shared JSONL file in that shape so the Rust kernel can ingest them without a
 running service. It is append-only and hash-chained via the main AuditLog, so
 tampering remains detectable.
 
 EventKind strings here mirror the Rust enum variants in
-sheshaaos-kernel/src/events.rs.
+SheshAOS crates/shesh-kernel/src/events.rs.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from enum import StrEnum
 from pathlib import Path
 
 
-class NexusEventKind(StrEnum):
+class KernelEventKind(StrEnum):
     # Must match the Rust EventKind variant names.
     TOOL_REQUESTED = "ToolRequested"
     TOOL_COMPLETED = "ToolCompleted"
@@ -35,7 +35,7 @@ class NexusEventKind(StrEnum):
 
 
 @dataclass
-class NexusEvent:
+class KernelEvent:
     event_id: str            # UUIDv7-ish (uuid4 until a uuid7 lib is added)
     sequence: int
     kind: str
@@ -46,12 +46,12 @@ class NexusEvent:
         return json.dumps(asdict(self), ensure_ascii=False)
 
 
-class NexusBridge:
-    """Append Nexus-compatible events to a shared JSONL file."""
+class KernelBridge:
+    """Append kernel-compatible events to a shared JSONL file."""
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or (
-            Path.home() / ".local" / "share" / "shesh" / "audit" / "nexus-events.jsonl"
+            Path.home() / ".local" / "share" / "shesh" / "audit" / "kernel-events.jsonl"
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._seq = self._tail_sequence()
@@ -67,9 +67,9 @@ class NexusBridge:
                 continue
         return seq
 
-    def emit(self, kind: NexusEventKind, payload: dict | None = None) -> NexusEvent:
+    def emit(self, kind: KernelEventKind, payload: dict | None = None) -> KernelEvent:
         self._seq += 1
-        ev = NexusEvent(
+        ev = KernelEvent(
             event_id=str(uuid.uuid4()),
             sequence=self._seq,
             kind=kind.value,
@@ -80,14 +80,14 @@ class NexusBridge:
             f.write(ev.to_json() + "\n")
         return ev
 
-    def read(self) -> list[NexusEvent]:
-        out: list[NexusEvent] = []
+    def read(self) -> list[KernelEvent]:
+        out: list[KernelEvent] = []
         if not self.path.exists():
             return out
         for line in self.path.read_text(encoding="utf-8").splitlines():
             try:
                 d = json.loads(line)
-                out.append(NexusEvent(**d))
+                out.append(KernelEvent(**d))
             except (json.JSONDecodeError, TypeError):
                 continue
         return out
