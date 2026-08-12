@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import functools
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -39,6 +40,7 @@ from fastmcp.tools.tool import ToolResult
 
 from .gate import Guard
 from .policy import Verdict
+from .tool_pins import verify_tool
 
 GUARDED_MARK = "_shesh_guarded"
 
@@ -78,6 +80,11 @@ class GuardMiddleware(Middleware):
         if fn is not None and getattr(fn, GUARDED_MARK, False):
             return await call_next(context)  # wrapped seam already handles it
 
+        # Protocol-seam rug-pull defense: mounted/proxied tools never saw the
+        # decorator, so verify their wire description against the pins here.
+        if tool is not None:
+            verify_tool(self._actor, name, getattr(tool, "description", None) or "", None)
+
         decision = self._guard.check(name, args, actor=self._actor)
         if decision.verdict == Verdict.DENY.value:
             self._guard.log_execution(
@@ -113,6 +120,11 @@ class GuardedMCP(FastMCP):
         """Override tool() to wrap the registered function with policy checks."""
         def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             actor = self._actor
+            # Rug-pull/poisoning defense: the tool definition (name, docstring
+            # description, signature) must match its integrity pin. First boot
+            # learns pins loudly; later drift refuses registration (ToolPinDrift).
+            verify_tool(self.name, getattr(fn, "__name__", "unknown"),
+                        inspect.getdoc(fn) or "", fn)
 
             @functools.wraps(fn)
             def wrapper(*args, **kwargs):
