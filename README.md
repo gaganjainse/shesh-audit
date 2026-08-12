@@ -32,3 +32,8 @@ uv run shesh-audit-mcp
 ```
 
 Events live in `~/.local/share/shesh/audit/events.jsonl`.
+
+## Security
+
+Security posture and vulnerability reporting: [canonical ecosystem security
+policy](https://github.com/gaganjainse/shesh-ecosystem/blob/main/SECURITY.md).
